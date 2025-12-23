@@ -11,10 +11,12 @@ import {
   calculateSummary,
   exportToCSV,
 } from '@/lib/transactions';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 export default function Dashboard() {
   const { user, signOut } = useAuth();
-  const [currentDate, setCurrentDate] = useState(new Date(2026, 0, 1)); // Jan 1, 2026
+  const [currentDate, setCurrentDate] = useState(new Date(2026, 0, 1));
   const [selectedDate, setSelectedDate] = useState(new Date(2026, 0, 1));
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -22,8 +24,14 @@ export default function Dashboard() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [showYearPicker, setShowYearPicker] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Quick Notes Sidebar
+  const [showNotes, setShowNotes] = useState(false);
+  const [quickNote, setQuickNote] = useState('');
+  const [noteSaving, setNoteSaving] = useState(false);
 
   // Form state
   const [formType, setFormType] = useState<'expense' | 'income'>('expense');
@@ -53,9 +61,48 @@ export default function Dashboard() {
     setLoading(false);
   }, [user, currentDate]);
 
+  // Load quick notes
+  const loadNotes = useCallback(async () => {
+    if (!user) return;
+    try {
+      const noteDoc = await getDoc(doc(db, 'notes', user.uid));
+      if (noteDoc.exists()) {
+        setQuickNote(noteDoc.data().content || '');
+      }
+    } catch (error) {
+      console.error('Error loading notes:', error);
+    }
+  }, [user]);
+
   useEffect(() => {
     loadTransactions();
-  }, [loadTransactions]);
+    loadNotes();
+  }, [loadTransactions, loadNotes]);
+
+  // Save notes
+  const saveNotes = async () => {
+    if (!user) return;
+    setNoteSaving(true);
+    try {
+      await setDoc(doc(db, 'notes', user.uid), {
+        content: quickNote,
+        updatedAt: Date.now(),
+      });
+    } catch (error) {
+      console.error('Error saving notes:', error);
+    }
+    setNoteSaving(false);
+  };
+
+  // Auto-save notes when content changes (debounced)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (quickNote && user) {
+        saveNotes();
+      }
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [quickNote]);
 
   // Get transactions for selected date
   const selectedDateStr = formatDate(selectedDate);
@@ -89,13 +136,6 @@ export default function Dashboard() {
     setCurrentDate(new Date(currentDate.getFullYear(), monthIndex, 1));
     setSelectedDate(new Date(currentDate.getFullYear(), monthIndex, 1));
     setShowMonthPicker(false);
-  }
-
-  function changeYear(delta: number) {
-    const newDate = new Date(currentDate);
-    newDate.setFullYear(newDate.getFullYear() + delta);
-    setCurrentDate(newDate);
-    setSelectedDate(new Date(newDate.getFullYear(), newDate.getMonth(), 1));
   }
 
   function selectYear(year: number) {
@@ -186,17 +226,64 @@ export default function Dashboard() {
     return CATEGORIES.find((c) => c.id === categoryId)?.color || '#f5f5f5';
   };
 
-  // Generate years for picker (2024 - 2030)
   const years = Array.from({ length: 7 }, (_, i) => 2024 + i);
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-screen bg-gray-100 relative">
+      {/* Quick Notes Sidebar */}
+      <div
+        className={`fixed top-0 right-0 h-full w-80 bg-white shadow-2xl z-50 transform transition-transform duration-300 ${
+          showNotes ? 'translate-x-0' : 'translate-x-full'
+        }`}
+      >
+        <div className="p-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white">
+          <div className="flex justify-between items-center">
+            <h2 className="font-bold text-lg">📝 Quick Notes</h2>
+            <button
+              onClick={() => setShowNotes(false)}
+              className="p-1 hover:bg-white/20 rounded"
+            >
+              ✕
+            </button>
+          </div>
+          <p className="text-xs opacity-80 mt-1">Auto-saves as you type</p>
+        </div>
+        <div className="p-4 h-[calc(100%-80px)]">
+          <textarea
+            value={quickNote}
+            onChange={(e) => setQuickNote(e.target.value)}
+            placeholder="Type your quick notes here...&#10;&#10;- Shopping list&#10;- Reminders&#10;- Ideas&#10;- Anything!"
+            className="w-full h-full p-3 border-2 border-gray-200 rounded-xl resize-none focus:border-amber-500 outline-none text-sm"
+          />
+          {noteSaving && (
+            <p className="text-xs text-amber-500 mt-2 text-center">Saving...</p>
+          )}
+        </div>
+      </div>
+
+      {/* Overlay when sidebar is open */}
+      {showNotes && (
+        <div
+          className="fixed inset-0 bg-black/30 z-40"
+          onClick={() => setShowNotes(false)}
+        />
+      )}
+
       <div className="max-w-md mx-auto bg-white min-h-screen shadow-xl">
         {/* Header */}
         <div className="bg-gradient-to-r from-purple-600 to-indigo-700 text-white p-4">
           <div className="flex justify-between items-center mb-4">
             <h1 className="text-xl font-bold">SP Daily Expense</h1>
             <div className="flex items-center gap-2">
+              {/* Quick Notes Button */}
+              <button
+                onClick={() => setShowNotes(true)}
+                className="p-2 bg-white/20 rounded-full hover:bg-white/30 transition"
+                title="Quick Notes"
+              >
+                📝
+              </button>
+              {/* Download Button */}
               <button
                 onClick={handleExport}
                 className="p-2 bg-white/20 rounded-full hover:bg-white/30 transition"
@@ -204,13 +291,49 @@ export default function Dashboard() {
               >
                 📥
               </button>
-              <button
-                onClick={signOut}
-                className="p-2 bg-white/20 rounded-full hover:bg-white/30 transition"
-                title="Sign Out"
-              >
-                🚪
-              </button>
+              {/* User Menu */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowUserMenu(!showUserMenu)}
+                  className="flex items-center gap-2 p-1 bg-white/20 rounded-full hover:bg-white/30 transition"
+                >
+                  {user?.photoURL ? (
+                    <img
+                      src={user.photoURL}
+                      alt="Profile"
+                      className="w-8 h-8 rounded-full"
+                    />
+                  ) : (
+                    <div className="w-8 h-8 rounded-full bg-white/30 flex items-center justify-center">
+                      👤
+                    </div>
+                  )}
+                </button>
+
+                {/* User Dropdown Menu */}
+                {showUserMenu && (
+                  <div className="absolute right-0 top-12 w-56 bg-white rounded-xl shadow-xl py-2 z-50">
+                    <div className="px-4 py-3 border-b">
+                      <p className="font-medium text-gray-800 truncate">
+                        {user?.displayName || 'User'}
+                      </p>
+                      <p className="text-xs text-gray-500 truncate">
+                        {user?.email}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setShowUserMenu(false);
+                        signOut();
+                      }}
+                      className="w-full px-4 py-3 text-left text-red-500 hover:bg-red-50 flex items-center gap-3"
+                    >
+                      <span>🚪</span>
+                      <span className="font-medium">Logout</span>
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -682,6 +805,14 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+
+      {/* Click outside to close user menu */}
+      {showUserMenu && (
+        <div
+          className="fixed inset-0 z-40"
+          onClick={() => setShowUserMenu(false)}
+        />
+      )}
 
       <style jsx>{`
         .scrollbar-hide::-webkit-scrollbar {
