@@ -1,57 +1,177 @@
 'use client';
 
+import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 
 export default function LoginPage() {
-  const { signInWithGoogle } = useAuth();
+  const { signInWithGoogle, signInWithEmail, signUpWithEmail } = useAuth();
+  const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleEmailAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    try {
+      if (mode === 'signup') {
+        if (!name.trim()) {
+          setError('Please enter your name');
+          setLoading(false);
+          return;
+        }
+        if (password.length < 6) {
+          setError('Password must be at least 6 characters');
+          setLoading(false);
+          return;
+        }
+        await signUpWithEmail(email, password, name);
+      } else {
+        await signInWithEmail(email, password);
+      }
+    } catch (err: any) {
+      console.error(err);
+      if (err.code === 'auth/email-already-in-use') {
+        setError('Email already registered. Please login instead.');
+      } else if (err.code === 'auth/invalid-email') {
+        setError('Invalid email address');
+      } else if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+        setError('Invalid email or password');
+      } else if (err.code === 'auth/user-not-found') {
+        setError('No account found. Please sign up first.');
+      } else if (err.code === 'auth/weak-password') {
+        setError('Password is too weak');
+      } else {
+        setError('Something went wrong. Please try again.');
+      }
+    }
+    setLoading(false);
+  };
+
+  const handleGoogleSignIn = async () => {
+    setError('');
+    try {
+      await signInWithGoogle();
+    } catch (err: any) {
+      setError('Failed to sign in with Google');
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-600 via-purple-700 to-indigo-800 flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-md text-center">
+      <div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-md">
         {/* Logo */}
-        <div className="w-20 h-20 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-2xl mx-auto mb-6 flex items-center justify-center">
-          <span className="text-4xl">💰</span>
+        <div className="text-center mb-6">
+          <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-2xl mx-auto mb-4 flex items-center justify-center">
+            <span className="text-3xl">💰</span>
+          </div>
+          <h1 className="text-2xl font-bold text-gray-800">SP Daily Expense</h1>
+          <p className="text-gray-500 text-sm">Track your daily expenses with ease</p>
         </div>
 
-        {/* Title */}
-        <h1 className="text-3xl font-bold text-gray-800 mb-2">SP Daily Expense</h1>
-        <p className="text-gray-500 mb-8">Track your daily expenses with ease</p>
+        {/* Tab Switcher */}
+        <div className="flex bg-gray-100 rounded-xl p-1 mb-6">
+          <button
+            onClick={() => { setMode('login'); setError(''); }}
+            className={`flex-1 py-2 rounded-lg font-medium transition ${
+              mode === 'login'
+                ? 'bg-white text-purple-600 shadow'
+                : 'text-gray-500'
+            }`}
+          >
+            Login
+          </button>
+          <button
+            onClick={() => { setMode('signup'); setError(''); }}
+            className={`flex-1 py-2 rounded-lg font-medium transition ${
+              mode === 'signup'
+                ? 'bg-white text-purple-600 shadow'
+                : 'text-gray-500'
+            }`}
+          >
+            Sign Up
+          </button>
+        </div>
 
-        {/* Features */}
-        <div className="space-y-4 mb-8">
-          <div className="flex items-center gap-3 text-left">
-            <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
-              <span>📊</span>
-            </div>
-            <div>
-              <p className="font-medium text-gray-800">Track Expenses</p>
-              <p className="text-sm text-gray-500">Monitor daily spending</p>
-            </div>
+        {/* Error Message */}
+        {error && (
+          <div className="bg-red-50 text-red-500 px-4 py-3 rounded-xl mb-4 text-sm">
+            {error}
           </div>
-          <div className="flex items-center gap-3 text-left">
-            <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-              <span>🤝</span>
-            </div>
+        )}
+
+        {/* Email/Password Form */}
+        <form onSubmit={handleEmailAuth} className="space-y-4">
+          {mode === 'signup' && (
             <div>
-              <p className="font-medium text-gray-800">Split Expenses</p>
-              <p className="text-sm text-gray-500">Share costs with friends</p>
+              <label className="text-xs font-medium text-gray-500 uppercase block mb-2">
+                Full Name
+              </label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Enter your name"
+                className="w-full p-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 outline-none"
+                required
+              />
             </div>
+          )}
+
+          <div>
+            <label className="text-xs font-medium text-gray-500 uppercase block mb-2">
+              Email
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Enter your email"
+              className="w-full p-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 outline-none"
+              required
+            />
           </div>
-          <div className="flex items-center gap-3 text-left">
-            <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-              <span>📥</span>
-            </div>
-            <div>
-              <p className="font-medium text-gray-800">Export Data</p>
-              <p className="text-sm text-gray-500">Download monthly reports</p>
-            </div>
+
+          <div>
+            <label className="text-xs font-medium text-gray-500 uppercase block mb-2">
+              Password
+            </label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder={mode === 'signup' ? 'Create a password (min 6 chars)' : 'Enter your password'}
+              className="w-full p-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 outline-none"
+              required
+            />
           </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className={`w-full py-3 bg-gradient-to-r from-purple-500 to-indigo-600 text-white rounded-xl font-semibold hover:shadow-lg transition ${
+              loading ? 'opacity-70' : ''
+            }`}
+          >
+            {loading ? 'Please wait...' : mode === 'signup' ? 'Create Account' : 'Login'}
+          </button>
+        </form>
+
+        {/* Divider */}
+        <div className="flex items-center gap-4 my-6">
+          <div className="flex-1 h-px bg-gray-200"></div>
+          <span className="text-sm text-gray-400">or</span>
+          <div className="flex-1 h-px bg-gray-200"></div>
         </div>
 
         {/* Google Sign In Button */}
         <button
-          onClick={signInWithGoogle}
-          className="w-full flex items-center justify-center gap-3 bg-white border-2 border-gray-200 rounded-xl py-4 px-6 font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all duration-200"
+          onClick={handleGoogleSignIn}
+          className="w-full flex items-center justify-center gap-3 bg-white border-2 border-gray-200 rounded-xl py-3 px-6 font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all duration-200"
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24">
             <path
@@ -74,8 +194,15 @@ export default function LoginPage() {
           Continue with Google
         </button>
 
-        <p className="text-xs text-gray-400 mt-6">
-          Your data is securely stored in the cloud
+        <p className="text-xs text-gray-400 mt-6 text-center">
+          Your data is securely stored in the cloud.<br/>
+          {mode === 'login' ? "Don't have an account? " : 'Already have an account? '}
+          <button
+            onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError(''); }}
+            className="text-purple-600 font-medium"
+          >
+            {mode === 'login' ? 'Sign up' : 'Login'}
+          </button>
         </p>
       </div>
     </div>
