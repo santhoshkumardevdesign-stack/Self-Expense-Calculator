@@ -43,6 +43,8 @@ export default function Dashboard() {
   const [formSplitWith, setFormSplitWith] = useState('');
   const [formSplitAmount, setFormSplitAmount] = useState('');
   const [formSplitStatus, setFormSplitStatus] = useState<'pending' | 'received'>('pending');
+  const [formSaving, setFormSaving] = useState(false);
+  const [formError, setFormError] = useState('');
 
   // Load transactions
   const loadTransactions = useCallback(async () => {
@@ -145,6 +147,8 @@ export default function Dashboard() {
   }
 
   function openModal(type: 'expense' | 'income', transaction?: Transaction) {
+    setFormError('');
+    setFormSaving(false);
     if (transaction) {
       setEditingTransaction(transaction);
       setFormType(transaction.type);
@@ -174,6 +178,9 @@ export default function Dashboard() {
   async function handleSubmit() {
     if (!user || !formAmount || !formDescription) return;
 
+    setFormSaving(true);
+    setFormError('');
+
     const data = {
       type: formType,
       amount: parseFloat(formAmount),
@@ -194,8 +201,11 @@ export default function Dashboard() {
       }
       setShowModal(false);
       loadTransactions();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving transaction:', error);
+      setFormError(error.message || 'Failed to save. Please try again.');
+    } finally {
+      setFormSaving(false);
     }
   }
 
@@ -688,7 +698,7 @@ export default function Dashboard() {
               )}
 
               {/* Date */}
-              <div className="mb-6">
+              <div className="mb-4">
                 <label className="text-xs font-medium text-gray-500 uppercase block mb-2">
                   Date
                 </label>
@@ -700,18 +710,29 @@ export default function Dashboard() {
                 />
               </div>
 
+              {/* Error Message */}
+              {formError && (
+                <div className="mb-4 p-3 bg-red-50 text-red-600 rounded-xl text-sm">
+                  {formError}
+                </div>
+              )}
+
               {/* Submit Button */}
               <button
                 onClick={handleSubmit}
-                disabled={!formAmount || !formDescription}
+                disabled={!formAmount || !formDescription || formSaving}
                 className={`w-full py-4 rounded-xl font-bold text-white transition ${
                   formType === 'expense'
                     ? 'bg-gradient-to-r from-red-500 to-red-600'
                     : 'bg-gradient-to-r from-green-500 to-green-600'
-                } ${(!formAmount || !formDescription) && 'opacity-50'}`}
+                } ${(!formAmount || !formDescription || formSaving) && 'opacity-50'}`}
               >
-                {editingTransaction ? 'Update' : 'Add'}{' '}
-                {formType === 'expense' ? 'Expense' : 'Income'}
+                {formSaving ? 'Saving...' : (
+                  <>
+                    {editingTransaction ? 'Update' : 'Add'}{' '}
+                    {formType === 'expense' ? 'Expense' : 'Income'}
+                  </>
+                )}
               </button>
             </div>
           </div>
