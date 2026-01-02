@@ -16,8 +16,8 @@ import { db } from '@/lib/firebase';
 
 export default function Dashboard() {
   const { user, signOut } = useAuth();
-  const [currentDate, setCurrentDate] = useState(new Date(2026, 0, 1));
-  const [selectedDate, setSelectedDate] = useState(new Date(2026, 0, 1));
+  const [currentDate, setCurrentDate] = useState(() => new Date());
+  const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -181,17 +181,21 @@ export default function Dashboard() {
     setFormSaving(true);
     setFormError('');
 
-    const data = {
+    const data: any = {
       type: formType,
       amount: parseFloat(formAmount),
       description: formDescription,
       category: formType === 'expense' ? formCategory : 'income',
       date: formDate,
       isSplit: formType === 'expense' ? formIsSplit : false,
-      splitWith: formIsSplit ? formSplitWith : undefined,
-      splitAmount: formIsSplit ? parseFloat(formSplitAmount) : undefined,
-      splitStatus: formIsSplit ? formSplitStatus : undefined,
     };
+
+    // Only add split fields if split is enabled (Firestore doesn't accept undefined)
+    if (formType === 'expense' && formIsSplit) {
+      data.splitWith = formSplitWith;
+      data.splitAmount = parseFloat(formSplitAmount) || 0;
+      data.splitStatus = formSplitStatus;
+    }
 
     try {
       if (editingTransaction) {
@@ -331,6 +335,16 @@ export default function Dashboard() {
                         {user?.email}
                       </p>
                     </div>
+                    <a
+                      href="https://console.firebase.google.com/project/self-expense-calculator/firestore/databases/-default-/usage"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => setShowUserMenu(false)}
+                      className="w-full px-4 py-3 text-left text-blue-600 hover:bg-blue-50 flex items-center gap-3"
+                    >
+                      <span>📊</span>
+                      <span className="font-medium">Firestore Usage</span>
+                    </a>
                     <button
                       onClick={() => {
                         setShowUserMenu(false);
